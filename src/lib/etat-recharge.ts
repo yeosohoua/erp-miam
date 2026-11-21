@@ -1,0 +1,1 @@
+export type EtatRecharge = { error?: string; ok?: string; url?: string } | undefined
