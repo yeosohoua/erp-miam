@@ -1,0 +1,1597 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  ACCOUNTANT
+  CASHIER
+  CHEF
+  STOREKEEPER
+  PURCHASER
+  HR
+  PARENT
+  ELEVE
+  EMPLOYE
+}
+
+model User {
+  codeAcces CodeAcces?
+  imageId      String?
+  image        Image?   @relation(fields: [imageId], references: [id], onDelete: SetNull)
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role     @default(MANAGER)
+  active       Boolean  @default(true)
+  tokenVersion Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  totpSecret    String?
+  totpEnabled   Boolean  @default(false)
+  totpLastStep  Int?
+  recoveryCodes String[] @default([])
+
+  etablissements UserEtablissement[]
+
+  @@map("users")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  userId    String?
+  userEmail String?
+  action    String
+  entity    String?
+  entityId  String?
+  details   String?
+  ip        String?
+
+  @@index([createdAt])
+  @@index([userId])
+  @@map("audit_logs")
+}
+
+enum EtablissementType {
+  SCHOOL
+  COMPANY
+  OTHER
+}
+
+model Etablissement {
+  commandesMobile CommandeMobile[]
+  cartesCadeaux CarteCadeau[]
+  categoriesArticles CategorieArticle[]
+  codesAcces CodeAcces[]
+  sessionsCaisse           SessionCaisse[]
+  images                   Image[]
+  logoId                   String?
+  logo                     Image?              @relation("EtabLogo", fields: [logoId], references: [id], onDelete: SetNull)
+  sessionCaisseObligatoire Boolean             @default(false)
+  id                       String              @id @default(cuid())
+  code                     String              @unique
+  name                     String
+  type                     EtablissementType   @default(SCHOOL)
+  address                  String?
+  phone                    String?
+  email                    String?
+  currency                 String              @default("XOF")
+  prepaye                  Boolean             @default(false)
+  active                   Boolean             @default(true)
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
+  users                    UserEtablissement[]
+
+  referentiels Referentiel[]
+  inscrits     Inscrit[]
+  ingredients  Ingredient[]
+  plats        Plat[]
+  menus        Menu[]
+  reservations Reservation[]
+
+  tarifs           Tarif[]
+  paiementsEnLigne PaiementEnLigne[]
+  transactions     Transaction[]
+
+  clients    Client[]
+  factures   Facture[]
+  reglements Reglement[]
+
+  fournisseurs           Fournisseur[]
+  bonsCommande           BonCommande[]
+  lots                   Lot[]
+  mouvementsStock        MouvementStock[]
+  consommations          Consommation[]
+  parametresNotification ParametresNotification?
+  notifications          Notification[]
+  ecrituresCompta        EcritureCompta[]
+  cloturesCompta         ClotureCompta[]
+  employesRh             EmployeRh[]
+  parametresPaie         ParametresPaie?
+  bulletinsPaie          BulletinPaie[]
+  evenementsCantine      EvenementCantine[]
+  plansProduction        PlanProduction[]
+  gaspillages            Gaspillage[]
+  articlesCarte          ArticleCarte[]
+  ventesComptoir         VenteComptoir[]
+
+  aides             Aide[]
+  aidesInscrits     AideInscrit[]
+  conges            Conge[]
+  pointages         Pointage[]
+  certifications    Certification[]
+  avisListe         Avis[]
+  suggestions       Suggestion[]
+  equipements       Equipement[]
+  releves           ReleveTemperature[]
+  tachesHygiene     TacheHygiene[]
+  executionsHygiene ExecutionHygiene[]
+  nonConformites    NonConformite[]
+  echantillons      EchantillonTemoin[]
+  objectifs         ObjectifKpi[]
+  clesApi           CleApi[]
+  reglesReappro     RegleReappro[]
+  transfertsEnvoyes Transfert[]         @relation("TransfertSource")
+  transfertsRecus   Transfert[]         @relation("TransfertDest")
+
+  @@map("etablissements")
+}
+
+model UserEtablissement {
+  userId          String
+  etablissementId String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+
+  @@id([userId, etablissementId])
+  @@index([etablissementId])
+  @@map("user_etablissements")
+}
+
+enum ReferentielKind {
+  GROUPE
+  REGIME
+  ALLERGIE
+}
+
+enum InscritType {
+  STUDENT
+  EMPLOYEE
+  GUEST
+}
+
+enum InscritStatut {
+  ACTIVE
+  SUSPENDED
+  LEFT
+}
+
+model Referentiel {
+  id              String            @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement     @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  kind            ReferentielKind
+  name            String
+  createdAt       DateTime          @default(now())
+  groupeInscrits  Inscrit[]         @relation("InscritGroupe")
+  regimeInscrits  Inscrit[]         @relation("InscritRegime")
+  allergies       InscritAllergie[]
+
+  ingredientAllergens IngredientAllergen[]
+
+  @@unique([etablissementId, kind, name])
+  @@map("referentiels")
+}
+
+model Inscrit {
+  codeAcces CodeAcces?
+  id              String            @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement     @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  matricule       String
+  firstName       String
+  lastName        String
+  type            InscritType       @default(STUDENT)
+  statut          InscritStatut     @default(ACTIVE)
+  groupeId        String?
+  groupe          Referentiel?      @relation("InscritGroupe", fields: [groupeId], references: [id], onDelete: SetNull)
+  regimeId        String?
+  regime          Referentiel?      @relation("InscritRegime", fields: [regimeId], references: [id], onDelete: SetNull)
+  badge           String            @unique
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  allergies       InscritAllergie[]
+  tuteurs         Tuteur[]
+  reservations    Reservation[]
+
+  solde            Int               @default(0)
+  transactions     Transaction[]
+  paiementsEnLigne PaiementEnLigne[]
+
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  aidesInscrit AideInscrit[]
+
+  imageId String?
+  image   Image?  @relation(fields: [imageId], references: [id], onDelete: SetNull)
+
+  @@unique([etablissementId, matricule])
+  @@index([clientId])
+  @@index([etablissementId, lastName])
+  @@map("inscrits")
+}
+
+model InscritAllergie {
+  inscritId  String
+  allergieId String
+  inscrit    Inscrit     @relation(fields: [inscritId], references: [id], onDelete: Cascade)
+  allergie   Referentiel @relation(fields: [allergieId], references: [id], onDelete: Cascade)
+
+  @@id([inscritId, allergieId])
+  @@map("inscrit_allergies")
+}
+
+model Tuteur {
+  id        String   @id @default(cuid())
+  inscritId String
+  inscrit   Inscrit  @relation(fields: [inscritId], references: [id], onDelete: Cascade)
+  name      String
+  relation  String?
+  phone     String?
+  email     String?
+  createdAt DateTime @default(now())
+
+  @@index([inscritId])
+  @@map("tuteurs")
+}
+
+enum MenuService {
+  BREAKFAST
+  LUNCH
+  SNACK
+  DINNER
+}
+
+enum MenuStatut {
+  DRAFT
+  PUBLISHED
+}
+
+model Ingredient {
+  id              String               @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement        @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  name            String
+  unit            String
+  unitCost        Decimal              @default(0) @db.Decimal(14, 4)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  allergens       IngredientAllergen[]
+  lignes          PlatIngredient[]
+  stock           Decimal              @default(0) @db.Decimal(14, 3)
+  seuil           Decimal              @default(0) @db.Decimal(14, 3)
+  lots            Lot[]
+  mouvementsStock MouvementStock[]
+  lignesAchat     BonCommandeLigne[]
+
+  nutrition     NutritionIngredient?
+  reglesReappro RegleReappro[]
+
+  @@unique([etablissementId, name])
+  @@map("ingredients")
+}
+
+model IngredientAllergen {
+  ingredientId String
+  allergieId   String
+  ingredient   Ingredient  @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  allergie     Referentiel @relation(fields: [allergieId], references: [id], onDelete: Cascade)
+
+  @@id([ingredientId, allergieId])
+  @@map("ingredient_allergens")
+}
+
+model Plat {
+  imageId         String?
+  image           Image?           @relation(fields: [imageId], references: [id], onDelete: SetNull)
+  id              String           @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement    @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  portions        Int              @default(1)
+  active          Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  ingredients     PlatIngredient[]
+  menus           MenuPlat[]
+
+  @@unique([etablissementId, name])
+  @@map("plats")
+}
+
+model PlatIngredient {
+  platId       String
+  ingredientId String
+  quantity     Decimal    @db.Decimal(12, 3)
+  plat         Plat       @relation(fields: [platId], references: [id], onDelete: Cascade)
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  @@id([platId, ingredientId])
+  @@index([ingredientId])
+  @@map("plat_ingredients")
+}
+
+model Menu {
+  imageId String?
+  image   Image?  @relation(fields: [imageId], references: [id], onDelete: SetNull)
+  id              String        @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  date            DateTime      @db.Date
+  service         MenuService
+  statut          MenuStatut    @default(DRAFT)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  plats           MenuPlat[]
+
+  @@unique([etablissementId, date, service])
+  @@index([etablissementId, date])
+  @@map("menus")
+}
+
+model MenuPlat {
+  menuId String
+  platId String
+  menu   Menu   @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  plat   Plat   @relation(fields: [platId], references: [id], onDelete: Cascade)
+
+  @@id([menuId, platId])
+  @@index([platId])
+  @@map("menu_plats")
+}
+
+enum ReservationStatut {
+  BOOKED
+  CANCELLED
+}
+
+model Reservation {
+  id              String            @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement     @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  inscritId       String
+  inscrit         Inscrit           @relation(fields: [inscritId], references: [id], onDelete: Cascade)
+  date            DateTime          @db.Date
+  service         MenuService
+  statut          ReservationStatut @default(BOOKED)
+  servedAt        DateTime?
+  walkIn          Boolean           @default(false)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  factureId String?
+  facture   Facture? @relation(fields: [factureId], references: [id], onDelete: SetNull)
+
+  @@unique([inscritId, date, service])
+  @@index([factureId])
+  @@index([etablissementId, date, service])
+  @@map("reservations")
+}
+
+enum MethodePaiement {
+  CASH
+  ORANGE
+  MTN
+  WAVE
+  MOOV
+  PAYSTACK
+}
+
+enum StatutPaiementEnLigne {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum TransactionType {
+  TOPUP
+  DEBIT
+  REFUND
+  ADJUST
+}
+
+model Tarif {
+  etablissementId String
+  service         MenuService
+  prix            Int           @default(0)
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+
+  @@id([etablissementId, service])
+  @@map("tarifs")
+}
+
+model Transaction {
+  id              String           @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement    @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  inscritId       String
+  inscrit         Inscrit          @relation(fields: [inscritId], references: [id], onDelete: Cascade)
+  type            TransactionType
+  methode         MethodePaiement?
+  montant         Int
+  reference       String?
+  reservationId   String?
+  note            String?
+  createdBy       String?
+  createdAt       DateTime         @default(now())
+
+  @@unique([etablissementId, reference])
+  @@index([inscritId, createdAt])
+  @@index([etablissementId, createdAt])
+  @@map("transactions")
+}
+
+model PaiementEnLigne {
+  id              String                @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement         @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  inscritId       String
+  inscrit         Inscrit               @relation(fields: [inscritId], references: [id], onDelete: Cascade)
+  userId          String?
+  userEmail       String
+  reference       String                @unique
+  montant         Int
+  statut          StatutPaiementEnLigne @default(PENDING)
+  canal           String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  creditedAt      DateTime?
+
+  @@index([inscritId, createdAt])
+  @@index([etablissementId, createdAt])
+  @@map("paiements_en_ligne")
+}
+
+enum StatutFacture {
+  DRAFT
+  ISSUED
+  PAID
+  CANCELLED
+}
+
+model Client {
+  id              String        @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  name            String
+  email           String?
+  phone           String?
+  address         String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  inscrits        Inscrit[]
+  factures        Facture[]
+
+  @@unique([etablissementId, name])
+  @@map("clients")
+}
+
+model Facture {
+  id              String         @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement  @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  clientId        String
+  client          Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  numero          Int?
+  periode         String
+  statut          StatutFacture  @default(DRAFT)
+  total           Int
+  emisLe          DateTime?
+  echeance        DateTime?      @db.Date
+  createdBy       String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  lignes          FactureLigne[]
+  reglements      Reglement[]
+  relances        Relance[]
+  reservations    Reservation[]
+
+  @@unique([etablissementId, numero])
+  @@index([etablissementId, statut])
+  @@index([clientId])
+  @@map("factures")
+}
+
+model FactureLigne {
+  id           String  @id @default(cuid())
+  factureId    String
+  facture      Facture @relation(fields: [factureId], references: [id], onDelete: Cascade)
+  libelle      String
+  quantite     Int
+  prixUnitaire Int
+  montant      Int
+
+  @@index([factureId])
+  @@map("facture_lignes")
+}
+
+model Reglement {
+  id              String          @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement   @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  factureId       String
+  facture         Facture         @relation(fields: [factureId], references: [id], onDelete: Cascade)
+  montant         Int
+  methode         MethodePaiement
+  reference       String?
+  createdBy       String?
+  createdAt       DateTime        @default(now())
+
+  @@unique([etablissementId, reference])
+  @@index([factureId])
+  @@map("reglements")
+}
+
+model Relance {
+  id        String   @id @default(cuid())
+  factureId String
+  facture   Facture  @relation(fields: [factureId], references: [id], onDelete: Cascade)
+  niveau    Int
+  note      String?
+  createdBy String?
+  createdAt DateTime @default(now())
+
+  @@unique([factureId, niveau])
+  @@map("relances")
+}
+
+enum TypeMouvement {
+  ENTREE
+  SORTIE
+  PERTE
+  INVENTAIRE
+}
+
+enum StatutBon {
+  DRAFT
+  SENT
+  PARTIAL
+  RECEIVED
+  CANCELLED
+}
+
+model Fournisseur {
+  id              String        @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  name            String
+  email           String?
+  phone           String?
+  address         String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  bons            BonCommande[]
+
+  @@unique([etablissementId, name])
+  @@map("fournisseurs")
+}
+
+model BonCommande {
+  id              String             @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement      @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  fournisseurId   String
+  fournisseur     Fournisseur        @relation(fields: [fournisseurId], references: [id], onDelete: Cascade)
+  numero          Int?
+  statut          StatutBon          @default(DRAFT)
+  note            String?
+  envoyeLe        DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  lignes          BonCommandeLigne[]
+
+  @@unique([etablissementId, numero])
+  @@index([etablissementId, statut])
+  @@index([fournisseurId])
+  @@map("bons_commande")
+}
+
+model BonCommandeLigne {
+  id           String      @id @default(cuid())
+  bonId        String
+  bon          BonCommande @relation(fields: [bonId], references: [id], onDelete: Cascade)
+  ingredientId String
+  ingredient   Ingredient  @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  quantite     Decimal     @db.Decimal(14, 3)
+  prix         Decimal     @default(0) @db.Decimal(14, 4)
+  recue        Decimal     @default(0) @db.Decimal(14, 3)
+
+  @@unique([bonId, ingredientId])
+  @@index([ingredientId])
+  @@map("bon_commande_lignes")
+}
+
+model Lot {
+  id              String           @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement    @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  ingredientId    String
+  ingredient      Ingredient       @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  reference       String
+  quantite        Decimal          @db.Decimal(14, 3)
+  restante        Decimal          @db.Decimal(14, 3)
+  prix            Decimal          @default(0) @db.Decimal(14, 4)
+  peremption      DateTime?        @db.Date
+  recuLe          DateTime         @default(now())
+  bonId           String?
+  mouvements      MouvementStock[]
+
+  @@index([ingredientId, restante])
+  @@index([etablissementId])
+  @@map("lots")
+}
+
+model MouvementStock {
+  id              String        @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  ingredientId    String
+  ingredient      Ingredient    @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  lotId           String?
+  lot             Lot?          @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  type            TypeMouvement
+  quantite        Decimal       @db.Decimal(14, 3)
+  prix            Decimal?      @db.Decimal(14, 4)
+  reference       String?
+  note            String?
+  bonId           String?
+  consommationId  String?
+  userEmail       String?
+  createdAt       DateTime      @default(now())
+
+  @@index([ingredientId, createdAt])
+  @@index([etablissementId, createdAt])
+  @@map("mouvements_stock")
+}
+
+model Consommation {
+  id              String        @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  date            DateTime      @db.Date
+  service         MenuService
+  repas           Int
+  userEmail       String?
+  createdAt       DateTime      @default(now())
+
+  @@unique([etablissementId, date, service])
+  @@map("consommations")
+}
+
+enum CanalNotification {
+  SMS
+  WHATSAPP
+  EMAIL
+}
+
+enum StatutNotification {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+model ParametresNotification {
+  etablissementId String        @id
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  sms             Boolean       @default(false)
+  whatsapp        Boolean       @default(false)
+  email           Boolean       @default(true)
+  relances        Boolean       @default(true)
+  recharges       Boolean       @default(true)
+  soldeBas        Boolean       @default(true)
+  seuilSoldeBas   Int           @default(1000)
+  repasServi      Boolean       @default(false)
+  alertesStock    Boolean       @default(true)
+
+  @@map("parametres_notification")
+}
+
+model Notification {
+  id              String             @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement      @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  canal           CanalNotification
+  destinataire    String
+  sujet           String?
+  message         String
+  evenement       String
+  cle             String
+  statut          StatutNotification @default(PENDING)
+  tentatives      Int                @default(0)
+  erreur          String?
+  createdAt       DateTime           @default(now())
+  envoyeLe        DateTime?
+
+  @@unique([etablissementId, cle])
+  @@index([etablissementId, createdAt])
+  @@index([statut])
+  @@map("notifications")
+}
+
+model Configuration {
+  cle       String   @id
+  valeur    String
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  @@map("configuration")
+}
+
+enum JournalCompta {
+  VE
+  AC
+  CA
+  BQ
+  OD
+}
+
+// Ecriture comptable immuable : on ne la modifie jamais, on la contrepasse.
+// (etablissementId, sourceType, sourceId) rend la comptabilisation d'une piece source idempotente.
+model EcritureCompta {
+  id              String          @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement   @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  numero          Int
+  journal         JournalCompta
+  date            DateTime        @db.Date
+  piece           String?
+  libelle         String
+  sourceType      String?
+  sourceId        String?
+  createdBy       String?
+  createdAt       DateTime        @default(now())
+  lignes          EcritureLigne[]
+
+  @@unique([etablissementId, numero])
+  @@unique([etablissementId, sourceType, sourceId])
+  @@index([etablissementId, date])
+  @@map("ecritures_compta")
+}
+
+model EcritureLigne {
+  id         String         @id @default(cuid())
+  ecritureId String
+  ecriture   EcritureCompta @relation(fields: [ecritureId], references: [id], onDelete: Cascade)
+  compte     String
+  debit      Int            @default(0)
+  credit     Int            @default(0)
+
+  @@index([ecritureId])
+  @@index([compte])
+  @@map("ecriture_lignes")
+}
+
+model ClotureCompta {
+  etablissementId String
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  periode         String
+  clotureLe       DateTime      @default(now())
+  clotureePar     String?
+
+  @@id([etablissementId, periode])
+  @@map("clotures_compta")
+}
+
+enum SituationFamiliale {
+  CELIBATAIRE
+  MARIE
+  DIVORCE
+  VEUF
+}
+
+enum StatutBulletin {
+  DRAFT
+  VALIDATED
+}
+
+model EmployeRh {
+  codeAcces CodeAcces?
+  id                String             @id @default(cuid())
+  etablissementId   String
+  etablissement     Etablissement      @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  matricule         String
+  firstName         String
+  lastName          String
+  poste             String?
+  dateEmbauche      DateTime           @db.Date
+  salaireBase       Int
+  primes            Int                @default(0)
+  indemniteExoneree Int                @default(0)
+  situation         SituationFamiliale @default(CELIBATAIRE)
+  enfants           Int                @default(0)
+  personnesCmu      Int                @default(1)
+  telephone         String?
+  actif             Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  bulletins         BulletinPaie[]
+
+  conges         Conge[]
+  pointages      Pointage[]
+  certifications Certification[]
+
+  @@unique([etablissementId, matricule])
+  imageId String?
+  image   Image?  @relation(fields: [imageId], references: [id], onDelete: SetNull)
+  @@map("employes_rh")
+}
+
+// Taux en points de base (630 = 6,30 %). Valeurs par defaut : CNPS et DGI au 1er janvier 2023 / reforme ITS 2024, a faire valider.
+model ParametresPaie {
+  etablissementId    String        @id
+  etablissement      Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  retraiteSalarieBp  Int           @default(630)
+  retraitePatronalBp Int           @default(770)
+  pfBp               Int           @default(500)
+  materniteBp        Int           @default(75)
+  atBp               Int           @default(200)
+  plafondRetraite    Int           @default(3375000)
+  plafondAutres      Int           @default(75000)
+  plancher           Int           @default(75000)
+  cmuSalarie         Int           @default(500)
+  cmuPatronale       Int           @default(500)
+  contributionBp     Int           @default(120)
+  apprentissageBp    Int           @default(40)
+  tfpcBp             Int           @default(120)
+  ricfDemiPart       Int           @default(5500)
+  cnpsDeductibleIts  Boolean       @default(false)
+  updatedAt          DateTime      @updatedAt
+  updatedBy          String?
+
+  @@map("parametres_paie")
+}
+
+model BulletinPaie {
+  id                String         @id @default(cuid())
+  etablissementId   String
+  etablissement     Etablissement  @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  employeId         String
+  employe           EmployeRh      @relation(fields: [employeId], references: [id], onDelete: Cascade)
+  periode           String
+  statut            StatutBulletin @default(DRAFT)
+  brut              Int
+  partsX2           Int
+  baseIts           Int
+  its               Int
+  retraiteSalarie   Int
+  cmuSalarie        Int
+  net               Int
+  retraitePatronale Int
+  pf                Int
+  maternite         Int
+  at                Int
+  cmuPatronale      Int
+  taxesPatronales   Int
+  coutEmployeur     Int
+  valideLe          DateTime?
+  createdBy         String?
+  createdAt         DateTime       @default(now())
+
+  @@unique([employeId, periode])
+  @@index([etablissementId, periode])
+  @@map("bulletins_paie")
+}
+
+enum TypeEvenement {
+  VACANCES
+  FERIE
+  METEO
+  EVENEMENT
+}
+
+enum TypeGaspillage {
+  RESTE_ASSIETTE
+  INVENDU
+  PREPARE_EN_TROP
+}
+
+enum StatutVente {
+  PAYEE
+  ANNULEE
+}
+
+// Calendrier qui module la prevision de frequentation (impact en pourcentage : -100 = ferme, +20 = affluence).
+model EvenementCantine {
+  id              String        @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  type            TypeEvenement
+  debut           DateTime      @db.Date
+  fin             DateTime      @db.Date
+  impactPct       Int
+  libelle         String
+  createdBy       String?
+  createdAt       DateTime      @default(now())
+
+  @@index([etablissementId, debut, fin])
+  @@map("evenements_cantine")
+}
+
+// Production decidee pour un service : la prevision du moment est conservee pour mesurer l'ecart avec le reel.
+model PlanProduction {
+  etablissementId String
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  date            DateTime      @db.Date
+  service         MenuService
+  prevus          Int
+  aProduire       Int
+  updatedBy       String?
+  updatedAt       DateTime      @updatedAt
+
+  @@id([etablissementId, date, service])
+  @@map("plans_production")
+}
+
+// Restes et pertes de repas, par plat. Le nom du plat et le cout par portion sont figes a la saisie.
+model Gaspillage {
+  id              String         @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement  @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  date            DateTime       @db.Date
+  service         MenuService
+  platId          String?
+  platNom         String
+  portions        Int
+  coutPortion     Int
+  cout            Int
+  type            TypeGaspillage
+  note            String?
+  userEmail       String?
+  createdAt       DateTime       @default(now())
+
+  @@index([etablissementId, date])
+  @@map("gaspillages")
+}
+
+model ArticleCarte {
+  imageId         String?
+  image           Image?        @relation(fields: [imageId], references: [id], onDelete: SetNull)
+  id              String        @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  nom             String
+  prix            Int
+  categorie       String?
+  active          Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  lignes          VenteLigne[]
+
+  @@unique([etablissementId, nom])
+  @@map("articles_carte")
+}
+
+// Vente au comptoir. methode nulle = payee par le compte prepaye de l'inscrit (inscritId), sinon encaissee (especes, Mobile Money).
+model VenteComptoir {
+  cleHorsLigne    String?
+  @@unique([etablissementId, cleHorsLigne])
+  partCompte      Int             @default(0)
+  remise          Int                  @default(0)
+  sessionId       String?
+  session         SessionCaisse?       @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  recu            Int?
+  id              String               @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement        @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  numero          Int
+  statut          StatutVente          @default(PAYEE)
+  methode         MethodePaiement?
+  inscritId       String?
+  visiteur        String?
+  total           Int
+  createdBy       String?
+  createdAt       DateTime             @default(now())
+  annuleeLe       DateTime?
+  annuleePar      String?
+  lignes          VenteLigne[]
+  remboursements  VenteRemboursement[]
+
+  @@unique([etablissementId, numero])
+  @@index([etablissementId, createdAt])
+  @@map("ventes_comptoir")
+}
+
+model VenteLigne {
+  id           String        @id @default(cuid())
+  venteId      String
+  vente        VenteComptoir @relation(fields: [venteId], references: [id], onDelete: Cascade)
+  articleId    String?
+  article      ArticleCarte? @relation(fields: [articleId], references: [id], onDelete: SetNull)
+  libelle      String
+  quantite     Int
+  prixUnitaire Int
+  montant      Int
+
+  @@index([venteId])
+  @@map("vente_lignes")
+}
+
+// ================= Aides et tarifs sociaux =================
+enum TypeAide {
+  POURCENTAGE
+  MONTANT
+  GRATUIT
+}
+
+model Aide {
+  id              String        @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  nom             String
+  type            TypeAide
+  valeur          Int           @default(0)
+  description     String?
+  active          Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  attributions    AideInscrit[]
+
+  @@unique([etablissementId, nom])
+  @@map("aides")
+}
+
+model AideInscrit {
+  id              String        @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  inscritId       String
+  inscrit         Inscrit       @relation(fields: [inscritId], references: [id], onDelete: Cascade)
+  aideId          String
+  aide            Aide          @relation(fields: [aideId], references: [id], onDelete: Cascade)
+  debut           DateTime      @db.Date
+  fin             DateTime?     @db.Date
+  motif           String?
+  createdBy       String?
+  createdAt       DateTime      @default(now())
+
+  @@unique([inscritId, aideId, debut])
+  @@index([etablissementId, inscritId])
+  @@map("aides_inscrits")
+}
+
+// ================= RH avancees =================
+enum TypeConge {
+  ANNUEL
+  MALADIE
+  MATERNITE
+  PERMISSION
+  SANS_SOLDE
+}
+
+enum StatutConge {
+  DEMANDE
+  APPROUVE
+  REFUSE
+}
+
+enum StatutPointage {
+  PRESENT
+  ABSENT
+  RETARD
+}
+
+enum TypeCertification {
+  VISITE_MEDICALE
+  FORMATION_HYGIENE
+  HACCP
+  PREMIERS_SECOURS
+}
+
+model Conge {
+  id              String        @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  employeId       String
+  employe         EmployeRh     @relation(fields: [employeId], references: [id], onDelete: Cascade)
+  type            TypeConge
+  debut           DateTime      @db.Date
+  fin             DateTime      @db.Date
+  jours           Int
+  statut          StatutConge   @default(DEMANDE)
+  motif           String?
+  decidePar       String?
+  decideLe        DateTime?
+  createdAt       DateTime      @default(now())
+
+  @@index([etablissementId, statut])
+  @@index([employeId])
+  @@map("conges")
+}
+
+model Pointage {
+  id              String         @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement  @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  employeId       String
+  employe         EmployeRh      @relation(fields: [employeId], references: [id], onDelete: Cascade)
+  date            DateTime       @db.Date
+  statut          StatutPointage @default(PRESENT)
+  minutesRetard   Int            @default(0)
+  note            String?
+  createdBy       String?
+  createdAt       DateTime       @default(now())
+
+  @@unique([employeId, date])
+  @@index([etablissementId, date])
+  @@map("pointages")
+}
+
+model Certification {
+  id              String            @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement     @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  employeId       String
+  employe         EmployeRh         @relation(fields: [employeId], references: [id], onDelete: Cascade)
+  type            TypeCertification
+  delivreeLe      DateTime          @db.Date
+  expireLe        DateTime          @db.Date
+  organisme       String?
+  note            String?
+  createdAt       DateTime          @default(now())
+
+  @@index([etablissementId, expireLe])
+  @@index([employeId])
+  @@map("certifications_rh")
+}
+
+// ================= Satisfaction et participation =================
+enum SourceAvis {
+  PARENT
+  ELEVE
+  PERSONNEL
+  COMPTOIR
+}
+
+enum StatutSuggestion {
+  NOUVELLE
+  EN_COURS
+  TRAITEE
+  REJETEE
+}
+
+model Avis {
+  id              String        @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  date            DateTime      @db.Date
+  service         MenuService
+  platId          String?
+  platNom         String?
+  note            Int
+  commentaire     String?
+  source          SourceAvis    @default(PARENT)
+  auteur          String?
+  createdAt       DateTime      @default(now())
+
+  @@index([etablissementId, date])
+  @@map("avis")
+}
+
+model Suggestion {
+  id              String           @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement    @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  titre           String
+  detail          String?
+  statut          StatutSuggestion @default(NOUVELLE)
+  reponse         String?
+  auteur          String?
+  traitePar       String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([etablissementId, statut])
+  @@map("suggestions")
+}
+
+// ================= Nutrition et menus intelligents =================
+model NutritionIngredient {
+  ingredientId String     @id
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  kcal         Int
+  proteines    Decimal    @db.Decimal(7, 2)
+  glucides     Decimal    @db.Decimal(7, 2)
+  lipides      Decimal    @db.Decimal(7, 2)
+  fibres       Decimal    @default(0) @db.Decimal(7, 2)
+  updatedAt    DateTime   @updatedAt
+
+  @@map("nutrition_ingredients")
+}
+
+// ================= Hygiene et tracabilite (HACCP) =================
+enum TypeEquipement {
+  REFRIGERATEUR
+  CONGELATEUR
+  CHAMBRE_FROIDE
+  BAIN_MARIE
+  VITRINE
+}
+
+enum GraviteNC {
+  MINEURE
+  MAJEURE
+  CRITIQUE
+}
+
+enum StatutNC {
+  OUVERTE
+  CORRIGEE
+  CLOTUREE
+}
+
+enum FrequenceHygiene {
+  QUOTIDIENNE
+  HEBDOMADAIRE
+}
+
+model Equipement {
+  id              String              @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement       @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  nom             String
+  type            TypeEquipement
+  tempMin         Decimal             @db.Decimal(5, 1)
+  tempMax         Decimal             @db.Decimal(5, 1)
+  actif           Boolean             @default(true)
+  createdAt       DateTime            @default(now())
+  releves         ReleveTemperature[]
+
+  @@unique([etablissementId, nom])
+  @@map("equipements")
+}
+
+model ReleveTemperature {
+  id              String        @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  equipementId    String
+  equipement      Equipement    @relation(fields: [equipementId], references: [id], onDelete: Cascade)
+  valeur          Decimal       @db.Decimal(5, 1)
+  conforme        Boolean
+  mesureLe        DateTime      @default(now())
+  par             String?
+  action          String?
+
+  @@index([equipementId, mesureLe])
+  @@index([etablissementId, mesureLe])
+  @@map("releves_temperature")
+}
+
+model TacheHygiene {
+  id              String             @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement      @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  nom             String
+  frequence       FrequenceHygiene   @default(QUOTIDIENNE)
+  zone            String?
+  actif           Boolean            @default(true)
+  createdAt       DateTime           @default(now())
+  executions      ExecutionHygiene[]
+
+  @@unique([etablissementId, nom])
+  @@map("taches_hygiene")
+}
+
+model ExecutionHygiene {
+  id              String        @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  tacheId         String
+  tache           TacheHygiene  @relation(fields: [tacheId], references: [id], onDelete: Cascade)
+  date            DateTime      @db.Date
+  faitPar         String?
+  faitLe          DateTime      @default(now())
+  note            String?
+
+  @@unique([tacheId, date])
+  @@index([etablissementId, date])
+  @@map("executions_hygiene")
+}
+
+model NonConformite {
+  id               String        @id @default(cuid())
+  etablissementId  String
+  etablissement    Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  titre            String
+  detail           String?
+  gravite          GraviteNC     @default(MINEURE)
+  statut           StatutNC      @default(OUVERTE)
+  source           String?
+  actionCorrective String?
+  creePar          String?
+  createdAt        DateTime      @default(now())
+  closLe           DateTime?
+
+  @@index([etablissementId, statut])
+  @@map("non_conformites")
+}
+
+model EchantillonTemoin {
+  id              String        @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  date            DateTime      @db.Date
+  service         MenuService
+  platNom         String
+  conserveJusqu   DateTime      @db.Date
+  emplacement     String?
+  preparePar      String?
+  jete            Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+
+  @@index([etablissementId, date])
+  @@map("echantillons_temoins")
+}
+
+// ================= Pilotage et integration =================
+model ObjectifKpi {
+  id              String        @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  kpi             String
+  cible           Decimal       @db.Decimal(14, 2)
+  sens            String        @default("MIN")
+  updatedBy       String?
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([etablissementId, kpi])
+  @@map("objectifs_kpi")
+}
+
+model CleApi {
+  id                  String        @id @default(cuid())
+  etablissementId     String
+  etablissement       Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  nom                 String
+  prefixe             String        @unique
+  hash                String
+  actif               Boolean       @default(true)
+  derniereUtilisation DateTime?
+  createdBy           String?
+  createdAt           DateTime      @default(now())
+  revoqueeLe          DateTime?
+
+  @@index([etablissementId])
+  @@map("cles_api")
+}
+
+// ================= Reapprovisionnement automatique et cuisine centrale =================
+enum StatutTransfert {
+  PREPARE
+  EXPEDIE
+  RECU
+  ANNULE
+}
+
+model RegleReappro {
+  id              String        @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  ingredientId    String
+  ingredient      Ingredient    @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  cible           Decimal       @db.Decimal(14, 3)
+  fournisseurId   String?
+  delaiJours      Int           @default(2)
+  actif           Boolean       @default(true)
+
+  @@unique([etablissementId, ingredientId])
+  @@map("regles_reappro")
+}
+
+model Transfert {
+  id        String           @id @default(cuid())
+  sourceId  String
+  source    Etablissement    @relation("TransfertSource", fields: [sourceId], references: [id], onDelete: Cascade)
+  destId    String
+  dest      Etablissement    @relation("TransfertDest", fields: [destId], references: [id], onDelete: Cascade)
+  numero    Int
+  statut    StatutTransfert  @default(PREPARE)
+  note      String?
+  creePar   String?
+  createdAt DateTime         @default(now())
+  expediLe  DateTime?
+  recuLe    DateTime?
+  lignes    TransfertLigne[]
+
+  @@unique([sourceId, numero])
+  @@index([destId, statut])
+  @@map("transferts")
+}
+
+model TransfertLigne {
+  id            String    @id @default(cuid())
+  transfertId   String
+  transfert     Transfert @relation(fields: [transfertId], references: [id], onDelete: Cascade)
+  ingredientId  String?
+  ingredientNom String
+  unite         String
+  quantite      Decimal   @db.Decimal(14, 3)
+  cout          Decimal   @default(0) @db.Decimal(14, 4)
+
+  @@index([transfertId])
+  @@map("transfert_lignes")
+}
+
+enum StatutSessionCaisse {
+  OUVERTE
+  CLOTUREE
+}
+
+model SessionCaisse {
+  id               String              @id @default(cuid())
+  etablissementId  String
+  etablissement    Etablissement       @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  numero           Int
+  caissierEmail    String
+  statut           StatutSessionCaisse @default(OUVERTE)
+  fondInitial      Int
+  ouverteLe        DateTime            @default(now())
+  clotureeLe       DateTime?
+  clotureePar      String?
+  especesAttendues Int?
+  especesComptees  Int?
+  ecart            Int?
+  noteCloture      String?
+  ventes           VenteComptoir[]
+
+  @@unique([etablissementId, numero])
+  @@index([etablissementId, statut])
+  @@index([etablissementId, caissierEmail, statut])
+  @@map("sessions_caisse")
+}
+
+model Image {
+  employes EmployeRh[]
+  categories CategorieArticle[]
+  menus Menu[]
+  plats           Plat[]
+  etablissementsLogo Etablissement[] @relation("EtabLogo")
+  inscrits        Inscrit[]
+  id              String         @id @default(cuid())
+  etablissementId String?
+  etablissement   Etablissement? @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  mime            String
+  taille          Int
+  donnees         Bytes
+  createdAt       DateTime       @default(now())
+  articles        ArticleCarte[]
+  users           User[]
+
+  @@index([etablissementId])
+  @@map("images")
+}
+
+model VenteRemboursement {
+  id              String        @id @default(cuid())
+  etablissementId String
+  venteId         String
+  vente           VenteComptoir @relation(fields: [venteId], references: [id], onDelete: Cascade)
+  montant         Int
+  motif           String
+  createdBy       String
+  sessionId       String?
+  createdAt       DateTime      @default(now())
+
+  @@index([venteId])
+  @@index([sessionId])
+  @@index([etablissementId, createdAt])
+  @@map("ventes_remboursements")
+}
+
+enum CibleAcces {
+  INSCRIT
+  EMPLOYE
+  PARENT
+}
+
+model CodeAcces {
+  id                String        @id @default(cuid())
+  etablissementId   String
+  etablissement     Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  cible             CibleAcces
+  inscritId         String?       @unique
+  inscrit           Inscrit?      @relation(fields: [inscritId], references: [id], onDelete: Cascade)
+  employeId         String?       @unique
+  employe           EmployeRh?    @relation(fields: [employeId], references: [id], onDelete: Cascade)
+  tuteurEmail       String?
+  userId            String?       @unique
+  user              User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  codeHash          String
+  codeChiffre       String
+  actif             Boolean       @default(true)
+  derniereConnexion DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@unique([etablissementId, codeHash])
+  @@unique([etablissementId, tuteurEmail])
+  @@index([etablissementId, cible])
+  @@unique([codeHash])
+  @@map("codes_acces")
+}
+
+model CategorieArticle {
+  id              String        @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  nom             String
+  ordre           Int           @default(0)
+  active          Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+
+  @@unique([etablissementId, nom])
+  imageId String?
+  image   Image?  @relation(fields: [imageId], references: [id], onDelete: SetNull)
+  @@map("categories_articles")
+}
+
+// Carte cadeau prepayee : le code n'est jamais stocke en clair (hash HMAC), usage unique, valable dans un seul etablissement.
+model CarteCadeau {
+  id              String        @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  codeHash        String        @unique
+  montant         Int
+  statut          String        @default("ACTIVE")
+  creeeLe         DateTime      @default(now())
+  utiliseeLe      DateTime?
+  inscritId       String?
+
+  @@index([etablissementId, statut])
+  @@map("cartes_cadeaux")
+}
+
+// Commande passee depuis l'app mobile (articles de la carte, repas au panier). Les prix sont recalcules par le serveur.
+model CommandeMobile {
+  id              String                @id @default(cuid())
+  etablissementId String
+  etablissement   Etablissement         @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  userId          String
+  inscritId       String?
+  total           Int
+  statut          String                @default("EN_ATTENTE")
+  paiement        String
+  mode            String                @default("A_EMPORTER")
+  createdAt       DateTime              @default(now())
+  lignes          CommandeMobileLigne[]
+
+  @@index([userId, createdAt])
+  @@index([etablissementId, statut])
+  @@map("commandes_mobile")
+}
+
+model CommandeMobileLigne {
+  id         String         @id @default(cuid())
+  commandeId String
+  commande   CommandeMobile @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+  articleId  String?
+  nom        String
+  prix       Int
+  quantite   Int
+  menuDate   String?
+  service    String?
+
+  @@index([commandeId])
+  @@map("commandes_mobile_lignes")
+}
